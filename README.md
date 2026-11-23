@@ -1,151 +1,80 @@
-# Ajolotito Hambriento — notificaciones locales bien hechas con TDD
+# Ajolotito Hambriento
 
-Una mascota virtual (un ajolote) cuya hambre sube con el tiempo; la app **avisa con notificaciones locales** cuando
-tiene hambre. Construida con **TDD** siguiendo el *Manual paso a paso con TDD — Ajolotito Hambriento*: reloj
-inyectable, predicción del momento del hambre, **horas de silencio (10 pm–8 am)**, tope diario, canales de Android,
-payload versionado, ids fijos (reemplazar en vez de duplicar), permiso pedido **en contexto** una sola vez, y el
-plugin aislado detrás de un puerto para poder probarlo todo sin teléfono.
+Mascota virtual para Android: un ajolote al que le da hambre con el paso del tiempo. Cuando tiene hambre, la app te
+avisa con una notificación en el teléfono.
 
----
+La app no manda avisos entre las 10 de la noche y las 8 de la mañana, tiene un límite de avisos al día y solo pide
+permiso de notificaciones cuando tú decides activarlas.
 
-## 📦 APK
+## APK
 
-| Archivo | Ruta |
-|---|---|
-| Lista para instalar | `apk/Ajolotito.apk` (16.9 MB) |
-| Salida de Flutter | `build/app/outputs/flutter-apk/app-release.apk` |
+- Lista para instalar: apk/Ajolotito.apk (16.9 MB)
+- Salida de Flutter: build/app/outputs/flutter-apk/app-release.apk
+
+Para compilarla:
 
 ```bash
 flutter build apk --release --target-platform android-arm64
 ```
 
-El APK es para teléfonos **arm64** (prácticamente todos los Android de los últimos años). Para instalar: copia el `.apk` al teléfono, ábrelo y acepta *instalar apps de origen desconocido*.
+El APK funciona en teléfonos arm64 (casi todos los Android recientes). Para instalarlo, copia el archivo .apk al
+teléfono, ábrelo y permite instalar apps de origen desconocido.
 
-Permiso que pide la app: **notificaciones** (Android 13+), solo cuando tocas *"Avísame cuando tenga hambre"*.
-Para verlas en minutos activa **Modo clase** (1 hora = 1 minuto) y minimiza la app.
+La app solo pide permiso de notificaciones (Android 13 o más nuevo), y lo hace cuando tocas "Avísame cuando tenga
+hambre". Para ver los avisos en pocos minutos, activa el Modo clase (1 hora equivale a 1 minuto) y minimiza la app.
 
----
+## Estructura del código
 
-## 🏗️ Estructura
+Todo el código está en la carpeta lib:
 
-```
-lib/
-├── dominio/        reloj · mascota · categoria · mensajes · politica · payload · planificador
-│                   puerto · almacen · gestor_permiso · servicio            (Dart puro)
-├── infra/          puerto_real (ÚNICO archivo que conoce flutter_local_notifications) · almacen_prefs
-├── presentacion/   ajolote_vm · dibujo_ajolote · pantalla_ajolote · pantalla_ajustes
-├── app.dart · main.dart
-test/  falsos · mascota · politica_payload · planificador · permiso · servicio · vm · pantalla
-```
+- dominio: las reglas de la mascota (hambre, humor, horarios de silencio, permisos y qué avisos programar).
+- infra: la conexión con las notificaciones del teléfono y el almacenamiento de datos.
+- presentacion: el dibujo del ajolote y las pantallas de la app (principal y ajustes).
+- app.dart y main.dart: el arranque de la app.
 
----
+La carpeta test tiene las pruebas de la app.
 
-## 🔴🟢🔵 Evidencia del ciclo TDD
+## Capturas de la app
 
-### 1. 🔴 ROJO — las pruebas se escriben primero y fallan
+Tomadas en un teléfono con el APK instalado.
 
-Las pruebas de `test/` se escribieron **antes** que el código. Al correr `flutter test` con `lib/` todavía vacía, nada compila:
+Ajolote feliz
 
-![Rojo: las pruebas no compilan](capturas/01_rojo_no_compila.png)
+<img src="capturas/app_01_feliz.png" width="250">
 
-### 2. ❌ Error real atrapado por una prueba
+Explicación antes del permiso
 
-La primera versión de las horas de silencio usó la condición "obvia":
+<img src="capturas/app_02_pre_permiso.png" width="250">
 
-```dart
-return h >= silencioDesde && h < silencioHasta;   // ❌ con 22 a 8, "h >= 22 Y h < 8" nunca es verdad
-```
+Avisos programados
 
-Es exactamente la trampa que describe el manual: el silencio cruza la medianoche. Cinco pruebas lo atraparon (el
-silencio nunca se activaba y `ajustar` no movía los avisos de las 23:00 ni de las 03:00):
+<img src="capturas/app_03_avisos.png" width="250">
 
-![Error atrapado por la prueba](capturas/02_error.png)
+Notificación de hambre
 
-**Corrección:**
+<img src="capturas/app_04_notificacion.png" width="250">
 
-```dart
-return silencioDesde > silencioHasta
-    ? (h >= silencioDesde || h < silencioHasta)   // ✅ cruza la medianoche
-    : (h >= silencioDesde && h < silencioHasta);  // silencio dentro del mismo día
-```
+Ajustes por categoría
 
-#### Error al compilar el APK: versión del plugin
+<img src="capturas/app_05_ajustes.png" width="250">
 
-La primera compilación falló aunque las pruebas estaban en verde: `flutter_local_notifications` **23.x** exige
-`compileSdk 37` y `androidx.core 1.19` (`Failed to find target with hash string 'android-37'` y después
-`cannot find symbol setSemanticStyle`). Flutter 3.47 compila con la API 36, así que se fijó la versión
-**`flutter_local_notifications: ^22.3.3`** (la última con API 36; del lado de Dart la API es la misma).
+Aviso de que está lleno
 
-### 3. 🔵 REFACTOR — limpiar sin romper nada
+<img src="capturas/app_06_lleno.png" width="250">
 
-Con las pruebas en verde se ordenó el código y `flutter analyze` quedó sin avisos:
+## Pruebas rápidas en la app
 
-![Analyze limpio](capturas/04_analyze_limpio.png)
+1. Primera vez: abre la app. No debe aparecer ningún mensaje pidiendo permiso.
+2. Antes del permiso: toca "Avísame cuando tenga hambre" y luego "Ahora no". No debe salir el mensaje del sistema.
+3. Permiso: toca "Avísame cuando tenga hambre" y luego "Sí, avísame". Sale el mensaje de Android y, al aceptar, aparece la lista de avisos.
+4. Prueba inmediata: toca "Probar una notificación ahora". La notificación debe llegar al momento.
+5. Modo clase: actívalo y minimiza la app. El aviso de hambre llega a los 6 minutos y el de hambre fuerte a los 8.5.
+6. Botón en la notificación: toca "Dar de comer" en la notificación. Se abre la app y el ajolote come.
+7. Lleno: toca "Dar de comer" cuando el ajolote acaba de comer. Debe salir "Xólotl está llenísimo; ni un acocil más."
 
-### 4. 🟢 VERDE — las 74 pruebas pasan
-
-![Verde: todas las pruebas pasan](capturas/05_verde_pruebas.png)
-
-### 5. 📦 Compilación del APK
-
-![Compilación del APK](capturas/06_build_apk.png)
-
----
-
-## ✅ Qué cubren las pruebas
-
-| Grupo | Lo que se verifica |
-|---|---|
-| Mascota | saciedad 100 → -10/h, nunca < 0, humor con fronteras (40 y 15), predicción, alimentar (+35, tope 100, llena), ritmo sin saltos, JSON dañado → null |
-| Política | silencio 22–8 cruzando la medianoche, siesta 13–15, ajustar al día siguiente y al cambiar de mes |
-| Payload | ida y vuelta, `v1:`, basura/versión futura → inicio |
-| Planificador | día normal exacto, silencio, colapso hambre+crítico, nada en silencio en las 24 h, categorías apagadas, tope diario, ids únicos |
-| Permiso | nunca pregunta al consultar, acepta, ya concedido, rechazo → Ajustes sin insistir |
-| Servicio y VM | sincronizar idempotente, sin permiso no programa, alimentar reemplaza avisos, primer/segundo plano, modo clase, toques en notificaciones |
-
-```bash
-flutter test
-```
-
----
-
-## 📱 Capturas de la app
-
-> Tomadas en un teléfono físico con el APK instalado. *Guarda tus capturas en `capturas/` con estos nombres y aparecerán aquí automáticamente.*
-
-| Ajolote feliz | Explicación antes del permiso | Avisos programados |
-|---|---|---|
-| ![](capturas/app_01_feliz.png) | ![](capturas/app_02_pre_permiso.png) | ![](capturas/app_03_avisos.png) |
-
-| Notificación de hambre | Ajustes por categoría | Aviso: está llenísimo |
-|---|---|---|
-| ![](capturas/app_04_notificacion.png) | ![](capturas/app_05_ajustes.png) | ![](capturas/app_06_lleno.png) |
-
-### Qué probar en la app
-
-| Caso | Qué hacer | Resultado esperado |
-|---|---|---|
-| Primera vez | Abre la app | NO aparece ningún diálogo de permiso |
-| Pre-permiso | "Avísame…" → "Ahora no" | No sale el diálogo del sistema |
-| Permiso | "Avísame…" → "Sí, avísame" | Diálogo de Android; al aceptar se listan los avisos |
-| Prueba inmediata | "Probar una notificación ahora" | Llega al instante |
-| Modo clase | Actívalo y minimiza la app | Aviso de hambre a los 6 min y crítico a los 8.5 |
-| Botón en la notificación | Toca "Dar de comer 🦐" | Abre la app y alimenta al ajolote |
-| Lleno | "Dar de comer" recién nacido | "Xólotl está llenísimo; ni un acocil más." |
-
----
-
-## 🛠️ Cómo correr el proyecto
+## Cómo correr el proyecto
 
 ```bash
 flutter pub get
-```
-
-```bash
-flutter test
-```
-
-```bash
 flutter run
 ```
-
